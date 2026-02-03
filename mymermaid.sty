@@ -5,26 +5,58 @@
 \RequirePackage{pgffor}
 \RequirePackage{ifthen}
 
-% Command to create Mermaid diagrams and return file path
-\newcommand{\mermaid}[3][1]{% #1 = scale factor (default to 1), #2 = diagram file, #3 = Mermaid code file
-    % Define filenames
-    \def\diagramfile{#2} % e.g., diagram.png
-    \def\scaleFactor{#1} % Scale factor (default is 1)
-    \def\mermaidfile{#3} % Point to the actual Mermaid code file
+% Construct the diagram filename from the Mermaid file path
+\newcommand{\diagramfilename}[1]{%
+    % Given the mermaid file name  append .png to create the diagram filename
+    \def\tempfilename{#1} % Store the input filename
 
-    % Check if the diagram file already exists and if there are changes in the Mermaid code file
-    \IfFileExists{\diagramfile}{
+    % Check if the filename is empty
+    \ifthenelse{\equal{\tempfilename}{\empty}}{%
+        \PackageError{mymermaid}{No filename supplied.}{Please specify a Mermaid file name.}%
+    }{%
+        % Extract the basename without the extension
+        \def\basename{} % Clear basename
+
+        % Iterate through backslash and forward slash to find the last part of the path
+        \foreach \x in {\\, /} {%
+            \ifthenelse{\equal{\tempfilename\string\x{0}}{\tempfilename}}{%
+                % Not found; continue
+            }{%
+                % Found a separator; extract the basename
+                \def\tempfilename{\expandafter\@gobble\tempfilename\string\x}%
+            }%
+        }
+
+        \edef\basename{\tempfilename}%
+        \edef\newfilename{\basename.png} % Append .png
+    }%
+}
+
+% Main command to include Mermaid diagrams using Kroki.io
+% usage: \mermaid[scale]{path/to/mermaidfile}
+\newcommand{\mermaid}[2][1]{%
+    \def\scaleFactor{#1} % Scale factor (defaults to 1)
+    \def\mermaidfile{#2} % (path to) mermaid code file
+
+    \def\width{1200} % Default width for the image
+    \def\height{800} % Default height for the image
+
+    % If the diagram file does not exist or the Mermaid code file has changed, regenerate it
+    % TODO: If the file is not being tracked it should always regenerate
+    \IfFileExists{\mermaidfile}{
+
+        \diagramfilename{\mermaidfile}
+
         % Check for changes using git diff against the Mermaid code file
-        \immediate\write18{git diff --quiet --exit-code \mermaidfile || ./generate_mermaid.sh "\mermaidfile" "\diagramfile"}
-    }{
-        \PackageWarning{mymermaid}{Input mermaid file does not exists}%
-    }
+        \immediate\write18{ [ ! -e "\newfilename" ] || ! git diff --quiet --exit-code "\mermaidfile" && curl -X POST -H "Content-Type: text/plain" --data-binary @"\mermaidfile" -o "\newfilename" "https://kroki.io/mermaid/png?width=\width&height=\height"}
 
-    % Include the image and check if it was created
-    \IfFileExists{\diagramfile}{
-        % Scale the image when including
-        \includegraphics[scale=\scaleFactor]{\diagramfile} % Include the image if created successfully
+        % Include the image and check if it was created
+        \IfFileExists{\newfilename}{
+            \includegraphics[scale=\scaleFactor]{\newfilename}
+        }{
+            \PackageWarning{mymermaid}{Diagram could not be created.}%
+        }
     }{
-        \PackageWarning{mymermaid}{Diagram could not be created.}%
+        \PackageError{mymermaid}{Mermaid code file does not exist: \mermaidfile}{Please check the file path and try again.}%
     }
 }
