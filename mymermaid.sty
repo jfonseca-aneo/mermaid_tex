@@ -1,0 +1,30 @@
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{mymermaid}[Mermaid Integration]
+
+\RequirePackage{graphicx}
+\RequirePackage{pgffor}
+\RequirePackage{ifthen}
+
+% Command to create Mermaid diagrams and return file path
+\newcommand{\mermaid}[3][1]{% #1 = scale factor (default to 1), #2 = diagram file, #3 = Mermaid code file
+    % Define filenames
+    \def\diagramfile{#2} % e.g., diagram.png
+    \def\scaleFactor{#1} % Scale factor (default is 1)
+    \def\mermaidfile{#3} % Point to the actual Mermaid code file
+
+    % Check if the diagram file already exists and if there are changes in the Mermaid code file
+    \IfFileExists{\diagramfile}{
+        % Check for changes using git diff against the Mermaid code file
+        \immediate\write18{git diff --quiet --exit-code \mermaidfile || ./generate_mermaid.sh "\mermaidfile" "\diagramfile"}
+    }{
+        \PackageWarning{mymermaid}{Input mermaid file does not exists}%
+    }
+
+    % Include the image and check if it was created
+    \IfFileExists{\diagramfile}{
+        % Scale the image when including
+        \includegraphics[scale=\scaleFactor]{\diagramfile} % Include the image if created successfully
+    }{
+        \PackageWarning{mymermaid}{Diagram could not be created.}%
+    }
+}
